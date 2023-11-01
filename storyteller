@@ -1,0 +1,103 @@
+#!/usr/bin/env python
+
+import sys
+import os
+from TTS.api import TTS
+import wave
+from pydub import AudioSegment
+
+# List available 🐸TTS models and choose the first one
+# print(TTS().list_models())
+# print(TTS.list_models().index("tts_models/en/ljspeech/vits"))  # 12
+# print(TTS().list_models().index("tts_models/en/vctk/vits"))  # 18
+# print([s for s in TTS.list_models() if "en/cv/vits" in s])
+# exit()
+
+
+# defaults
+start_line = 1
+to_line = 0
+process_lines = 1
+in_file_name = ""
+pause_between_lines = 1000
+out_file_name = "book.wav"
+
+args = sys.argv[1:]
+# print('Argument List: {}.'.format(str(args)))
+
+if '--help' in args:
+    print('''
+Available parameters are the following:
+--help                - call this text,
+--in-file             - required parameter. Absolute or relative path with file name to the text file to be read,
+--out-file            - absolute or relative path with file name of the output WAV file. The default value is "book.wav",
+--start-line          - integer line number to start reading from. The default value is 1,
+--to-line             - integer line number to which to read. Must be greater or equal the --start-line. If the value is higher than total lines in the book - the latter value will be taken as the reading end-point. If not set of 0 the value of --process-lines is considered,
+--process-lines       - integer number of lines to read starting from the --start-line          - only works if --to-line is not defined. The default value is 1,
+--pause-between-lines - duration of silence in millisecods between lines in the resulting audio file. The default value is 1000.
+
+Example command:
+./storyteller --start-line=3 --to-line=5 --process-lines=130 --in-file=~/Temp/alice.txt --out-file=alice.wav --pause-between-lines=750
+    ''')
+    exit()
+
+
+for arg in args:
+    parts = arg.split("=")
+    if len(parts) != 2:
+        continue
+
+    match parts[0]:
+        case "--start-line":
+            start_line = int(parts[1])
+        case "--to-line":
+            to_line = int(parts[1])
+        case "--process-lines":
+            process_lines = int(parts[1])
+        case "--in-file":
+            in_file_name = os.path.expanduser(parts[1])
+        case "--out-file":
+            out_file_name = parts[1]
+        case "--pause-between-lines":
+            pause_between_lines = int(parts[1])
+
+    print(parts)
+
+if in_file_name.strip() == "":
+    print("A file name to process '--in-file=' must be provided.")
+    exit()
+
+book = open(in_file_name, 'r')
+
+# TTS = TTS()
+model_name = TTS().list_models()[18]
+print("Model name is '{}".format(model_name))
+tts = TTS(model_name)
+# print(tts.speakers)
+# print(type(tts.speakers))
+# print(tts.speakers.index('p230'))
+print("Chosen speaker is '{}'".format(tts.speakers[6]))
+# exit()
+
+# get rid of empty lines
+lines = list(filter(None, map(lambda s: s.strip("\n\"\“\”"), book.readlines())))
+print("Total Lines: {}".format(len(lines)))
+
+if start_line > len(lines):
+    print("Start line is greater than total number of lines!")
+    exit()
+
+line_wav_file_name = "line.wav"
+silent_segment = AudioSegment.silent(duration=pause_between_lines)
+book = silent_segment
+
+limit = min(to_line, len(lines)) if to_line > 0 and to_line >= start_line else min(
+    start_line + process_lines - 1, len(lines))
+
+for i in range(start_line - 1, limit):
+    print("Processing line {}.".format(i + 1))
+    tts.tts_to_file(
+        text=lines[i], file_path=line_wav_file_name, speaker=tts.speakers[6])
+    book = book + AudioSegment.from_wav(line_wav_file_name) + silent_segment
+
+book.export(out_file_name, format="wav")
