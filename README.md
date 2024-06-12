@@ -1,36 +1,61 @@
-The code provided is a Python script that reads a text file and converts each line of the text into speech using a TTS (Text-to-Speech) model. The resulting audio is saved as a WAV file.
+### Text-to-Speech Script: Guide
 
-To effectively use this script, follow these steps:
+The provided Python script converts text from a file into speech using a specified Text-to-Speech (TTS) model. Below are detailed instructions on how to use this script effectively:
 
-1. Install the required dependencies:
+#### Prerequisites
 
-   - TTS library: `pip install TTS`
-   - pydub library: `pip install pydub`
+Before running the script, ensure you have installed the required libraries.
+Run
+```
+pipenv install
+```
+or install the libraries with `pip`:
+```
+pip install coqui-tts
+pip install pydub
+pip install torch
+```
 
-2. Save the code in a Python file, for example, `storyteller.py`.
+Save the provided Python code in a file named `storyteller.py` or any preferred name.
 
-3. Prepare a text file with the content you want to convert to speech. Let's say the file is named `input.txt`.
+#### Input Text File
 
-4. Open a terminal or command prompt and navigate to the directory where the Python file and the input text file are located.
+Prepare a text file with your desired content. For example, save it as `input.txt`.
 
-5. Run the script with the desired parameters. Here are the available parameters:
+#### Running the Script
 
-   - `--help`: Display the available parameters and their descriptions.
-   - `--in-file`: Required parameter. Specify the path to the input text file.
-   - `--out-file`: Specify the path to the output WAV file. The default value is "book.wav".
-   - `--start-line`: Specify the line number to start reading from. The default value is 1.
-   - `--to-line`: Specify the line number to read until. Must be greater than or equal to the start line. If not set or set to 0, the value of `--process-lines` is considered.
-   - `--process-lines`: Specify the number of lines to read starting from the start line. Only works if `--to-line` is not defined. The default value is 1.
-   - `--pause-between-lines`: Specify the duration of silence in milliseconds between lines in the resulting audio file. The default value is 1000.
+Open a terminal or command prompt and navigate to the directory containing `storyteller.py` and your input text file. Run the script using appropriate parameters:
 
-   Example command:
+Available parameters include:
+- `--in-file`: Path to the input text file (required).
+- `--out-file`: Path for the output WAV file (default: "book.wav").
+- `--start-line`: Line number to start reading from (default: 1).
+- `--to-line` or `--process-lines`: To specify either an end line number or a count of lines to process. If `--to-line` is set, it specifies the last line number; if not, `--process-lines` determines how many lines are processed starting from `--start-line`.
+- `--pause-between-lines`: Duration in milliseconds for silence between lines (default: 1000).
 
-   ```
-   python storyteller.py --start-line=3 --to-line=5 --process-lines=130 --in-file=input.txt --out-file=output.wav --pause-between-lines=750
-   ```
+Example usage:
+```
+> ./storyteller --start-line=3 --to-line=5 --process-lines=130 --in-file=~/Temp/alice.txt --out-file=alice.wav --pause-between-lines=750 --model-name=tts_models/en/vctk/vits --speaker-id=p230
+```
 
-   This command will read lines 3 to 5 from the input text file, process 130 lines in total (starting from line 3), and save the resulting audio as "output.wav" with a pause of 750 milliseconds between lines.
+This command converts lines 3 to 5 (inclusive) from the `alice.txt` file into speech, with a pause of 750 milliseconds between each line. The output is saved as "alice.wav".
 
-6. The script will generate the output WAV file based on the specified parameters.
+#### Model Selection
 
-Please note that you need to have a compatible TTS model installed for the script to work properly. The script currently uses the TTS model at index 18, which can be changed if needed.
+The script automatically loads a default TTS model but can be customized using:
+- `--model-name`: Path or name of the TTS model to use (the default value is set to `"tts_models/en/vctk/vits"`).
+- `--speaker-id`: Speaker ID for multi-speaker models.
+
+If the requested **model** cannot be found, the script lists available models and prompts for selection.
+
+In case of multi-speaker model, the script lists available **speaker ID**s and prompts for selection.
+
+#### Device Selection
+
+The script determines a suitable device for processing the TTS output automatically.
+
+### Note on Usage
+
+Ensure that your TTS model is compatible with the input text. The script currently targets the English language using VCTK dataset-based models.
+
+With these steps, you can generate audio files from textual content seamlessly using this Python script and the provided README guide.
