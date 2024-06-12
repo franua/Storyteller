@@ -1,103 +1,119 @@
 #!/usr/bin/env python
 
-import sys
+import argparse
 import os
 from TTS.api import TTS
-import wave
+import torch
 from pydub import AudioSegment
-
-# List available 🐸TTS models and choose the first one
-# print(TTS().list_models())
-# print(TTS.list_models().index("tts_models/en/ljspeech/vits"))  # 12
-# print(TTS().list_models().index("tts_models/en/vctk/vits"))  # 18
-# print([s for s in TTS.list_models() if "en/cv/vits" in s])
-# exit()
+from pprint import pprint
 
 
-# defaults
-start_line = 1
-to_line = 0
-process_lines = 1
-in_file_name = ""
-pause_between_lines = 1000
-out_file_name = "book.wav"
-
-args = sys.argv[1:]
-# print('Argument List: {}.'.format(str(args)))
-
-if '--help' in args:
-    print('''
-Available parameters are the following:
---help                - call this text,
---in-file             - required parameter. Absolute or relative path with file name to the text file to be read,
---out-file            - absolute or relative path with file name of the output WAV file. The default value is "book.wav",
---start-line          - integer line number to start reading from. The default value is 1,
---to-line             - integer line number to which to read. Must be greater or equal the --start-line. If the value is higher than total lines in the book - the latter value will be taken as the reading end-point. If not set of 0 the value of --process-lines is considered,
---process-lines       - integer number of lines to read starting from the --start-line          - only works if --to-line is not defined. The default value is 1,
---pause-between-lines - duration of silence in millisecods between lines in the resulting audio file. The default value is 1000.
-
-Example command:
-./storyteller --start-line=3 --to-line=5 --process-lines=130 --in-file=~/Temp/alice.txt --out-file=alice.wav --pause-between-lines=750
-    ''')
-    exit()
+def determine_device():
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
 
 
-for arg in args:
-    parts = arg.split("=")
-    if len(parts) != 2:
-        continue
+def check_in_file(filepath: str) -> str:
+    filepath_expanded = os.path.expanduser(filepath)
+    if filepath_expanded.strip() == "":
+        print("A file name to process '--in-file=' must be provided.")
+        exit()
 
-    match parts[0]:
-        case "--start-line":
-            start_line = int(parts[1])
-        case "--to-line":
-            to_line = int(parts[1])
-        case "--process-lines":
-            process_lines = int(parts[1])
-        case "--in-file":
-            in_file_name = os.path.expanduser(parts[1])
-        case "--out-file":
-            out_file_name = parts[1]
-        case "--pause-between-lines":
-            pause_between_lines = int(parts[1])
+    return filepath_expanded
 
-    print(parts)
 
-if in_file_name.strip() == "":
-    print("A file name to process '--in-file=' must be provided.")
-    exit()
+def check_speaker(tts: TTS, speaker_id: str):
+    if speaker_id in tts.speakers:
+        return speaker_id
 
-book = open(in_file_name, 'r')
+    print(
+        f"The requested speaker '{speaker_id}' is not found in the model '{tts.model_name}'."
+    )
+    print(f"There are the following speakers available:")
+    print(tts.speakers)
+    speaker_id = input(f"Please choose one spealer id: ")
 
-# TTS = TTS()
-model_name = TTS().list_models()[18]
-print("Model name is '{}".format(model_name))
-tts = TTS(model_name)
-# print(tts.speakers)
-# print(type(tts.speakers))
-# print(tts.speakers.index('p230'))
-print("Chosen speaker is '{}'".format(tts.speakers[6]))
-# exit()
+    return check_speaker(tts, speaker_id)
 
-# get rid of empty lines
-lines = list(filter(None, map(lambda s: s.strip("\n\"\“\”"), book.readlines())))
-print("Total Lines: {}".format(len(lines)))
 
-if start_line > len(lines):
-    print("Start line is greater than total number of lines!")
-    exit()
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Read a text file and output an audio book."
+    )
+    parser.add_argument("--in-file", required=True, help="Path to the input text file")
+    parser.add_argument(
+        "--out-file",
+        default="book.wav",
+        help='Output WAV file name. Default is "book.wav".',
+    )
+    parser.add_argument("--start-line", type=int, default=1, help="Start line number.")
+    parser.add_argument("--to-line", type=int, default=0, help="End line number.")
+    parser.add_argument(
+        "--process-lines",
+        type=int,
+        default=1,
+        help="Number of lines to process from start-line",
+    )
+    parser.add_argument(
+        "--pause-between-lines",
+        type=int,
+        default=1000,
+        help="Silence between lines in milliseconds",
+    )
+    parser.add_argument("--speaker-id", type=str, default="")
+    parser.add_argument("--model-name", type=str, default="tts_models/en/vctk/vits")
 
-line_wav_file_name = "line.wav"
-silent_segment = AudioSegment.silent(duration=pause_between_lines)
-book = silent_segment
+    return parser.parse_args()
 
-limit = min(to_line, len(lines)) if to_line > 0 and to_line >= start_line else min(
-    start_line + process_lines - 1, len(lines))
 
-for i in range(start_line - 1, limit):
-    print("Processing line {}.".format(i + 1))
-    tts.tts_to_file(
-        text=lines[i], file_path=line_wav_file_name, speaker=tts.speakers[6])
-    book = book + AudioSegment.from_wav(line_wav_file_name) + silent_segment
+def load_model(model_name: str) -> TTS:
+    try:
+        return TTS(model_name)
+    except Exception:
+        print(f"Could not load the request model '{model_name}'.")
+        print(f"There are the following models available:")
+        pprint(TTS.list_models())
+        model_name = input("Please choose a model: ")
+        return load_model(model_name)
 
-book.export(out_file_name, format="wav")
+
+def main():
+    args = parse_args()
+
+    book = open(check_in_file(args.in_file), "r")
+
+    tts = load_model(args.model_name)
+    tts.to(device=determine_device())
+
+    speaker = None
+    if tts.is_multi_speaker:
+        speaker = check_speaker(tts=tts, speaker_id=args.speaker_id)
+
+    lines = list(filter(None, map(lambda s: s.strip('\n"\“\”'), book.readlines())))
+    # ensure start line is valid
+    start_line = min(args.start_line, len(lines))
+    # determine end point based on arguments
+    limit = min(
+        (args.to_line if args.to_line > 0 else (start_line + args.process_lines - 1)),
+        len(lines),
+    )
+
+    book_audio = AudioSegment.silent(duration=args.pause_between_lines)
+
+    line_wav_file_name = "line.wav"
+    for i in range(start_line - 1, limit):
+        print("Processing line {}.".format(i + 1))
+        tts.tts_to_file(text=lines[i], file_path=line_wav_file_name, speaker=speaker)
+        book_audio += AudioSegment.from_wav(line_wav_file_name) + AudioSegment.silent(
+            duration=args.pause_between_lines
+        )
+
+    book_audio.export(args.out_file, format="wav")
+
+
+if __name__ == "__main__":
+    main()
